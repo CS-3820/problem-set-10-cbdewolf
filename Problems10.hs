@@ -33,14 +33,14 @@ accumulator was.
 -- Here is our expression data type
 
 data Expr = -- Arithmetic
-            Const Int | Plus Expr Expr 
+            Const Int | Plus Expr Expr
             -- λ-calculus
           | Var String | Lam String Expr | App Expr Expr
             -- accumulator
-          | Store Expr | Recall 
+          | Store Expr | Recall
             -- exceptions
-          | Throw Expr | Catch Expr String Expr 
-  deriving Eq          
+          | Throw Expr | Catch Expr String Expr
+  deriving Eq
 
 deriving instance Show Expr
 
@@ -59,7 +59,7 @@ instance Show Expr where
   showsPrec i Recall    = showString "recall"
   showsPrec i (Throw m) = showParen (i > 2) $ showString "throw " . showsPrec 3 m
   showsPrec i (Catch m y n) = showParen (i > 0) $ showString "try " . showsPrec 0 m . showString " catch " . showString y . showString " -> " . showsPrec 0 n
--}  
+-}
 
 -- Values are, as usual, integer and function constants
 isValue :: Expr -> Bool
@@ -96,14 +96,14 @@ be replaced by the substitution?
 -------------------------------------------------------------------------------}
 
 substUnder :: String -> Expr -> String -> Expr -> Expr
-substUnder x m y n 
+substUnder x m y n
   | x == y = n
   | otherwise = subst x m n
 
 subst :: String -> Expr -> Expr -> Expr
 subst _ _ (Const i) = Const i
 subst x m (Plus n1 n2) = Plus (subst x m n1) (subst x m n2)
-subst x m (Var y) 
+subst x m (Var y)
   | x == y = m
   | otherwise = Var y
 subst x m (Lam y n) = Lam y (substUnder x m y n)
@@ -205,7 +205,29 @@ bubble; this won't *just* be `Throw` and `Catch.
 -------------------------------------------------------------------------------}
 
 smallStep :: (Expr, Expr) -> Maybe (Expr, Expr)
-smallStep = undefined
+smallStep (Const _, _) = Nothing
+smallStep (Lam _ _, _) = Nothing
+
+smallStep (Plus (Const i) (Const j), acc) = Just (Const (i + j), acc)
+smallStep (Plus (Const i) n, acc) = case smallStep (n, acc) of
+  Just (n', acc') -> Just (Plus (Const i) n', acc')
+  Nothing -> Nothing
+smallStep (Plus m n, acc) = case smallStep (m, acc) of
+  Just (m', acc') -> Just (Plus m' n, acc')
+  Nothing -> Nothing
+
+smallStep (App (Lam x m) n, acc) 
+  | isValue n = Just (subst x n m, acc)
+smallStep (App m n, acc)
+  | isValue m = case smallStep (n, acc) of
+    Just (n', acc') -> Just (App m n', acc')
+    Nothing -> Nothing
+  | otherwise = case smallStep (m, acc) of
+    Just (m', acc') -> Just (App m' n, acc')
+    Nothing -> Nothing
+
+
+
 
 steps :: (Expr, Expr) -> [(Expr, Expr)]
 steps s = case smallStep s of
